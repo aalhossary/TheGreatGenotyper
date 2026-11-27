@@ -8,10 +8,11 @@ They are a starting point for a CI test, not a finished test suite.
 
 | Script | Purpose |
 |---|---|
-| `run_small_test.sh` | Runs everything: simulate, build an index, genotype, score. Exits non-zero if concordance is below a threshold. |
+| `run_small_test.sh` | Runs everything: simulate, build an index, genotype in HMM mode and in k-mer-only mode, score. Exits non-zero if concordance is below a threshold or cluster statistics are inconsistent. |
 | `simulate.py` | Takes a region of `test_data/` chr21 and its variants, makes a 5-sample phased panel, and simulates samples as mosaics of panel haplotypes with 30x error-free 150 bp reads. Seeded. |
 | `build_index.sh` | Builds an index by running the rules of `DatabaseBuilder/Snakefile` by hand, and records the time of each step. |
 | `concordance.py` | Compares called genotypes with the simulated truth. |
+| `check_cluster_stats.py` | Checks that all records of a variant cluster report the same UK and KC per sample. Regression check for mis-indexed statistics of clustered variants. |
 | `kmer_counts_summary.py` | Shows whether a sequence-and-counts pair holds per-k-mer counts or one count per sequence. |
 | `compare_vcfs.py` | Counts GT, GQ and GL differences between two genotyper outputs. |
 | `tsan_summary.py` | Groups ThreadSanitizer reports by the first project frame. |

@@ -19,6 +19,12 @@ set(CMAKE_CXX_FLAGS "-Wall -Wextra -Wno-long-long -Wno-unknown-pragmas -O3 -fope
 add_subdirectory(src)
 #add_subdirectory(tests)
 
+# Self-contained regression tests. They do not depend on the (currently
+# disabled) Catch test suite in tests/ and are run by ctest.
+add_executable(SampleVariantStatsTest tests/SampleVariantStatsTest.cpp)
+target_include_directories(SampleVariantStatsTest PRIVATE src)
+add_test(NAME SampleVariantStatsTest COMMAND SampleVariantStatsTest)
+
 #add_custom_target(check COMMAND ${CMAKE_CTEST_COMMAND} DEPENDS tests)
 
 get_property(dirs DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY INCLUDE_DIRECTORIES)
