@@ -287,36 +287,44 @@ VariantReader::VariantReader(string filename, string reference_filename, size_t 
 
     for(auto chrom: this->chromsomes)
     {
-        this->variantsStatsPerSample[chrom]=std::vector<std::vector<unsigned short>>(size_of(chrom));
+        this->variantsStatsPerSample[chrom]=std::vector<SampleVariantStats>(size_of(chrom));
     }
 
 	cerr << "Identified " << this->nr_variants << " variants in total from VCF-file." << endl;
 }
 
 void VariantReader::addVariantStat(unsigned int variantID, std::string sampleName,std::string chromosome,
-                                   vector<unsigned char>& defined_alleles,std::vector<VariantStats> & singleton_stats)
+                                   const vector<Variant>& singleton_variants, const std::vector<VariantStats> & singleton_stats)
 {
     auto sample_it= std::find(samples.begin(),samples.end(), sampleName);
     if(sample_it == samples.end())
     {
-        throw runtime_error("VariantReader::write_genotypes_of: unknown sample.");
+        throw runtime_error("VariantReader::addVariantStat: unknown sample.");
 
     }
-    unsigned  sampleID= sample_it-samples.begin();
-    size_t stat_size=(defined_alleles.size()+2)* singleton_stats.size();
-    if(variantsStatsPerSample[chromosome][variantID].size() == 0)
-    {
-        size_t size= stat_size* this->samples.size();
-        variantsStatsPerSample[chromosome][variantID].resize(size);
+    if (singleton_variants.size() != singleton_stats.size()) {
+        throw runtime_error("VariantReader::addVariantStat: number of singleton variants and of statistics differ.");
     }
-	size_t index= stat_size* sampleID;
-// UK
-    for (size_t j = 0; j < singleton_stats.size(); ++j){
-        variantsStatsPerSample[chromosome][variantID][index++]=singleton_stats.at(j).nr_unique_kmers;
-        variantsStatsPerSample[chromosome][variantID][index++]=singleton_stats[j].coverage;
-        for (unsigned int a = 0; a < defined_alleles.size(); ++a) {
-            variantsStatsPerSample[chromosome][variantID][index++]=singleton_stats.at(j).kmer_counts[a];
+    unsigned  sampleID= sample_it-samples.begin();
+    SampleVariantStats& stats = variantsStatsPerSample[chromosome][variantID];
+    if(stats.empty())
+    {
+        // each singleton gets a block as wide as its own number of alleles
+        vector<size_t> alleles_per_singleton;
+        for (const Variant& v : singleton_variants) {
+            alleles_per_singleton.push_back(v.nr_of_alleles());
         }
+        stats.init(this->samples.size(), alleles_per_singleton);
+    }
+    for (size_t j = 0; j < singleton_stats.size(); ++j){
+        size_t nr_alleles = stats.nr_of_alleles(j);
+        vector<unsigned short> allele_counts(nr_alleles, 0);
+        for (size_t a = 0; a < nr_alleles; ++a) {
+            // alleles without an entry have no unique kmers
+            auto it = singleton_stats[j].kmer_counts.find(a);
+            if (it != singleton_stats[j].kmer_counts.end()) allele_counts[a] = it->second;
+        }
+        stats.set(sampleID, j, singleton_stats[j].nr_unique_kmers, singleton_stats[j].coverage, allele_counts);
     }
 
 }
@@ -603,9 +611,7 @@ void VariantReader::write_genotypes_of(string chromosome,  std::map<std::string,
                         genotype_likelihoods = singleton_likelihoods[sample_index].at(j).get_specific_likelihoods(
                                 defined_alleles);
 
-                    size_t stat_size = (defined_alleles.size() + 2) * singleton_variants.size();
-                    size_t indexBase = stat_size * sample_index + (defined_alleles.size() + 2) * j;
-                    unsigned short nr_uniq_kmers = variantsStatsPerSample[chromosome][i][indexBase];
+                    unsigned short nr_uniq_kmers = variantsStatsPerSample[chromosome][i].unique_kmers(sample_index, j);
 
 
                     // determine computed genotype
@@ -628,9 +634,8 @@ void VariantReader::write_genotypes_of(string chromosome,  std::map<std::string,
                     genotype_likelihoods = singleton_likelihoods[sample_index].at(j).get_specific_likelihoods(
                             defined_alleles);
                 nr_alleles = defined_alleles.size();
-                size_t stat_size = (defined_alleles.size() + 2) * singleton_variants.size();
-                size_t indexBase = stat_size * sample_index + (defined_alleles.size() + 2) * j;
-                unsigned short nr_uniq_kmers = variantsStatsPerSample[chromosome][i][indexBase];
+                const SampleVariantStats& stats = variantsStatsPerSample[chromosome][i];
+                unsigned short nr_uniq_kmers = stats.unique_kmers(sample_index, j);
 
 
                 // determine computed genotype
@@ -685,12 +690,12 @@ void VariantReader::write_genotypes_of(string chromosome,  std::map<std::string,
                         oss << "," << setprecision(4) << log10(likelihoods[k]);
                     }
                     genotyping_outfile << ":" << oss.str(); // GL
-                    genotyping_outfile << ":" << variantsStatsPerSample[chromosome][i][indexBase + 1]; //KC
+                    genotyping_outfile << ":" << stats.coverage(sample_index, j); //KC
                     genotyping_outfile << ":" << nr_uniq_kmers; // UK
                     ostringstream oss2;
                     for (unsigned int a = 0; a < nr_alleles; ++a) {
                         if (a > 0) oss2 << ",";
-                        oss2 << variantsStatsPerSample[chromosome][i][indexBase + 2 + a];
+                        oss2 << stats.allele_kmer_count(sample_index, j, a);
                     }
                     genotyping_outfile << ":" << oss2.str();//AK
                 }

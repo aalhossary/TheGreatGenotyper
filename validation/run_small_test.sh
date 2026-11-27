@@ -4,8 +4,11 @@
 # usage: run_small_test.sh <workdir> [start] [end] [n_samples]
 #   default region: chr21:20,000,000-20,500,000 of test_data, 4 samples
 # environment: TGG_BUILD (default <repo>/build), THREADS (default 4),
-#              SMOOTH (default 10000000), MIN_CONCORDANCE (default 0.99)
-# Exits non-zero if concordance of called genotypes is below MIN_CONCORDANCE.
+#              SMOOTH (default 10000000), MIN_CONCORDANCE (default 0.99),
+#              MIN_CONCORDANCE_KMER (default 0.98)
+# Runs the HMM workflow, then the k-mer-only workflow. Exits non-zero if
+# concordance is below the minimum, or if statistics of clustered variants
+# are inconsistent.
 set -euo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd); REPO=$(cd "$HERE/.." && pwd)
 D=$1; START=${2:-20000000}; END=${3:-20500000}; NS=${4:-4}
@@ -22,3 +25,12 @@ mkdir -p "$D/run"; cd "$D/run"
 python3 "$HERE/concordance.py" "$D/sim/truth.vcf" "$D/run/out.vcf" | tee "$D/run/concordance.txt"
 c=$(sed -n 's/.*of called: \([0-9.]*\).*/\1/p' "$D/run/concordance.txt")
 python3 -c "import sys; c=float('$c'); m=float('${MIN_CONCORDANCE:-0.99}'); print('concordance of called genotypes:', c, '(minimum', m, ')'); sys.exit(0 if c>=m else 1)"
+
+# k-mer-only mode, extra fields, no population filter. Regression test for the
+# clustered-variant statistics: they must be consistent within a cluster, and
+# few genotypes may be blanked.
+"$GG" -a -w -f -g -i "$D/index/indexes" -j "$P" -t "$P" -e 100000000 -r "$D/sim/ref.fa" -y "$D/run/emissions_kmer" -v "$D/sim/panel.vcf" -o "$D/run/out_kmer.vcf" 2> "$D/run/log_kmer"
+python3 "$HERE/check_cluster_stats.py" "$D/run/out_kmer.vcf"
+python3 "$HERE/concordance.py" "$D/sim/truth.vcf" "$D/run/out_kmer.vcf" | tee "$D/run/concordance_kmer.txt"
+c=$(sed -n 's/.*of all: \([0-9.]*\).*/\1/p' "$D/run/concordance_kmer.txt")
+python3 -c "import sys; c=float('$c'); m=float('${MIN_CONCORDANCE_KMER:-0.98}'); print('k-mer-only concordance of all genotypes:', c, '(minimum', m, ')'); sys.exit(0 if c>=m else 1)"

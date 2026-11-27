@@ -12,6 +12,7 @@
 #include "variant.hpp"
 #include "genotypingresult.hpp"
 #include "uniquekmers.hpp"
+#include "samplevariantstats.hpp"
 
 //std::vector<unsigned char> construct_index(std::vector<DnaSequence>& alleles, bool reference_added);
 //std::vector<unsigned char> construct_index(std::vector<std::string>& alleles, bool reference_added);
@@ -60,7 +61,13 @@ public:
 	void get_left_overhang(std::string chromosome, size_t index, size_t length, DnaSequence& result) const;
 	void get_right_overhang(std::string chromosome, size_t index, size_t length, DnaSequence& result) const;
     void setSampleName(std::string sampleName);
-    void addVariantStat(unsigned int variantID, std::string sampleName,std::string chromosome,std::vector<unsigned char>& defined_alleles ,std::vector<VariantStats> & stat);
+    /**
+    * store the k-mer statistics of one sample for the (possibly clustered) variant variantID.
+    * @param singleton_variants the single variants the cluster consists of (see Variant::separate_variants)
+    * @param singleton_stats one entry per singleton (see Variant::variant_statistics)
+    * May be called concurrently for different variantIDs, not for the same one.
+    **/
+    void addVariantStat(unsigned int variantID, std::string sampleName,std::string chromosome,const std::vector<Variant>& singleton_variants, const std::vector<VariantStats> & singleton_stats);
 private:
 	FastaReader fasta_reader;
 	size_t kmer_size;
@@ -76,7 +83,8 @@ private:
 	static std::map< std::string, std::vector<Variant> > variants_per_chromosome;
 	static std::map< std::string, std::vector<std::vector<std::string>>> variant_ids;
 //  std::map<std::string, std::map<std::string, std::vector<std::vector<VariantStats> >  > > variantsStatsPerSample;
-    std::map<std::string, std::vector<std::vector<unsigned short>> > variantsStatsPerSample;
+    // chromosome -> one entry per (possibly clustered) variant
+    std::map<std::string, std::vector<SampleVariantStats> > variantsStatsPerSample;
 	void add_variant_cluster(std::string& chromosome, std::vector<Variant>* cluster);
 	void insert_ids(std::string& chromosome, std::vector<DnaSequence>& alleles, std::vector<std::string>& variant_ids, bool reference_added);
 	std::string get_ids(std::string chromosome, std::vector<std::string>& alleles, size_t variant_index, bool reference_added);
