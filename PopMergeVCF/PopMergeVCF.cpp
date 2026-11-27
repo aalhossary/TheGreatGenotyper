@@ -24,10 +24,13 @@ int main() {
             // Split VCF line for computations
             std::istringstream iss(line);
 
-            for(auto q:quals)
+            // the thresholds are per variant: forget the qualities of the
+            // previous line (by reference; the vectors keep their capacity)
+            for(auto& q:quals)
             {
                 q.second.clear();
             }
+            quals_threshold.clear();
             samples_genotypes.clear();
             samples_genotypes_quality.clear();
 
@@ -58,8 +61,11 @@ int main() {
                 }
                 field_count++;
             }
-            for(auto q:quals)
+            for(auto& q:quals)
             {
+                // genotypes seen on earlier lines but not on this one
+                if(q.second.empty())
+                    continue;
                 sort(q.second.begin(),q.second.end());
                 quals_threshold[q.first] = q.second[q.second.size()/ 4 ];
             }
